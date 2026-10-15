@@ -1,9 +1,15 @@
 services:
   kingshot-discord-bot:
-    image: ghcr.io/kingshot-project/kingshot-discord-bot:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: kingshot-korean-alliance:local
     container_name: kingshot-discord-bot
     volumes:
       - /opt/docker/kingshot/db/:/app/db
     restart: unless-stopped
     environment:
-      - DISCORD_BOT_TOKEN=<your bot token here>
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN:?Set DISCORD_BOT_TOKEN in the server environment}
+      - UPDATE=0
+      - KINGSHOT_ENABLE_LIVE_REDEMPTION=0
+      - KINGSHOT_ENABLE_CODE_SHARING=0

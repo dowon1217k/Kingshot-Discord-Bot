@@ -1,6 +1,7 @@
 """
 Alliance member operations. Handles member imports, removals, and transfers.
 """
+from .i18n import tr
 import discord
 from discord.ext import commands
 import sqlite3
@@ -1753,7 +1754,7 @@ class AllianceMemberOperations(commands.Cog):
             return
 
         if not await self.is_admin(interaction.user.id):
-            await interaction.response.send_message("You do not have permission to use this command.", ephemeral=True)
+            await interaction.response.send_message(tr("permission.denied"), ephemeral=True)
             return
 
         process_queue = self.bot.get_cog('ProcessQueue')
@@ -2642,7 +2643,7 @@ class IDSearchModal(discord.ui.Modal):
                 has_permission = any(str(aid) == str(current_alliance_id) for aid, _, _ in self.alliances)
                 if not has_permission:
                     await interaction.response.send_message(
-                        f"{theme.deniedIcon} You don't have permission to manage the alliance this member belongs to.",
+                        f"{theme.deniedIcon} {tr('permission.denied')}",
                         ephemeral=True
                     )
                     return

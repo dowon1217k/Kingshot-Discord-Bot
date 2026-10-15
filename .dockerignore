@@ -1,0 +1,16 @@
+.git
+.env
+.env.*
+bot_token.txt
+db
+log
+logs
+backups
+*.sqlite*
+*.db*
+*.log
+**/__pycache__
+.pytest_cache
+bot_venv
+.venv
+tests

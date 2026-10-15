@@ -92,3 +92,29 @@ def make_templates_cog():
         return cog
 
     return _build
+
+
+@pytest.fixture(autouse=True)
+def offline_transport(monkeypatch):
+    """Exercise mocked live branches while forbidding external socket traffic."""
+    import socket
+    original = socket.socket.connect
+    original_ex = socket.socket.connect_ex
+
+    def allowed(address):
+        return isinstance(address, str) or address[0] in ('127.0.0.1', '::1', 'localhost')
+
+    def connect(sock, address):
+        if not allowed(address):
+            raise RuntimeError('External networking is forbidden in tests')
+        return original(sock, address)
+
+    def connect_ex(sock, address):
+        if not allowed(address):
+            raise RuntimeError('External networking is forbidden in tests')
+        return original_ex(sock, address)
+
+    monkeypatch.setattr(socket.socket, 'connect', connect)
+    monkeypatch.setattr(socket.socket, 'connect_ex', connect_ex)
+    monkeypatch.setenv('KINGSHOT_ENABLE_LIVE_REDEMPTION', '1')
+    monkeypatch.delenv('KINGSHOT_ENABLE_CODE_SHARING', raising=False)

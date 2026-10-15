@@ -1,6 +1,8 @@
 """
 Bot health dashboard. Shows API status, database health, system info, and cleanup tools.
 """
+from .runtime_policy import live_redemption_enabled, sharing_url
+from .i18n import tr
 import discord
 from discord.ext import commands, tasks
 import sqlite3
@@ -174,7 +176,7 @@ class BotHealth(commands.Cog):
         self.log_path = "log"
         self.archive_path = "log/archive"
         self.settings_db_path = "db/settings.sqlite"
-        self.gift_api_url = "http://ks-gift-code-api.whiteout-bot.com/giftcode_api.php"
+        self.gift_api_url = sharing_url()
         self.gift_api_key = "super_secret_bot_token_nobody_will_ever_find"
 
         self.logger = logging.getLogger('bot')
@@ -347,6 +349,8 @@ class BotHealth(commands.Cog):
 
     async def _probe_wos_api(self) -> dict:
         """Live probe of the Gift Redemption API via a signed gift_code_config call."""
+        if not live_redemption_enabled():
+            return {"status": STATUS_WARNING, "message": tr("common.service_disabled")}
         try:
             gift = self.bot.get_cog("GiftOperations")
             if gift is None:
@@ -358,7 +362,7 @@ class BotHealth(commands.Cog):
 
             timeout = aiohttp.ClientTimeout(total=5)
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(url, data={"sign": sign, "time": t}, headers=get_headers()) as response:
+                async with session.post(url, data={"sign": sign, "time": t}, headers=get_headers(), allow_redirects=False) as response:
                     if response.status == 200:
                         return {'status': STATUS_HEALTHY, 'message': 'Online'}
                     if response.status in (429, 1015, 502, 503, 504):
@@ -412,13 +416,15 @@ class BotHealth(commands.Cog):
     async def _probe_gift_distribution_api(self) -> dict:
         """Actual live probe — only called by the cached wrapper or the
         background refresh loop."""
+        if not sharing_url():
+            return {"status": STATUS_WARNING, "message": tr("common.service_disabled")}
         try:
             timeout = aiohttp.ClientTimeout(total=5)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 start = datetime.now()
                 headers = get_headers()
                 headers['X-API-Key'] = self.gift_api_key
-                async with session.get(self.gift_api_url, headers=headers) as response:
+                async with session.get(self.gift_api_url, headers=headers, allow_redirects=False) as response:
                     elapsed = (datetime.now() - start).total_seconds()
 
                     if response.status == 200:

@@ -40,7 +40,7 @@ def _make_cog():
 
 
 def _redeem(response):
-    session = types.SimpleNamespace(post=lambda url, data=None, timeout=None: response)
+    session = types.SimpleNamespace(post=lambda url, data=None, timeout=None, allow_redirects=False: response)
     return asyncio.run(gr.redeem_giftcode_once(_make_cog(), 21385585, "KS0715", 259, session))
 
 

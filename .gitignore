@@ -20,3 +20,27 @@
 !tests/
 !tests/**
 tests/sim/gallery/
+
+# Korean alliance fork: never publish credentials, member data or runtime outputs.
+!cogs/locales/
+!cogs/locales/*.json
+!docs/
+!docs/*.md
+!.env.example
+.env
+.env.*
+!.env.example
+bot_token.txt
+/db/
+/log/
+/logs/
+/backups/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.log
+__pycache__/
+*.py[cod]
+.pytest_cache/
+!.dockerignore

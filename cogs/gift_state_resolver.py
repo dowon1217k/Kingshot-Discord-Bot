@@ -5,6 +5,7 @@ redemption: a wrong kid returns 40020, the correct kid returns 40014. Probes are
 per-FID rate limited, so we try the alliance state, alliance-mates' states, then a
 bounded window around the last-known state, and resolve different FIDs in parallel.
 """
+from .runtime_policy import live_redemption_enabled
 import asyncio
 import hashlib
 import random
@@ -67,13 +68,15 @@ def classify_probe(status_code, payload):
 
 
 async def _probe(cog, session, fid, kid, code):
+    if not live_redemption_enabled():
+        return "error"
     from . import gift_redemption
     import time as _time
     payload_in = {"fid": str(fid), "cdk": code, "kid": str(kid), "time": str(int(_time.time()))}
     data = _sign(cog.wos_encrypt_key, payload_in)
 
     def _post():
-        return session.post(cog.wos_giftcode_url, data=data, timeout=(10, 30))
+        return session.post(cog.wos_giftcode_url, data=data, timeout=(10, 30), allow_redirects=False)
 
     await gift_redemption.await_rate_limit(cog)  # probes spend the same per-IP budget as redemption
     try:

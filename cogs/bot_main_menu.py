@@ -1,6 +1,7 @@
 """
 Centralized menu system that handles all main menu logic and routing.
 """
+from .i18n import tr
 
 import discord
 from discord.ext import commands
@@ -109,7 +110,7 @@ async def _deny_alliance_access(interaction: discord.Interaction, alliance_id: i
         return False
     send = interaction.followup.send if interaction.response.is_done() else interaction.response.send_message
     await send(
-        f"{theme.deniedIcon} You don't have permission to manage this alliance.",
+        f"{theme.deniedIcon} {tr('permission.denied')}",
         ephemeral=True,
     )
     return True
@@ -119,7 +120,7 @@ async def _require_registration_admin(interaction: discord.Interaction) -> bool:
     _, is_global = PermissionManager.is_admin(interaction.user.id)
     if not is_global:
         await interaction.response.send_message(
-            f"{theme.deniedIcon} Only global administrators can manage Self-Registration.",
+            f"{theme.deniedIcon} {tr('permission.denied')}",
             ephemeral=True,
         )
     return is_global
@@ -215,7 +216,7 @@ class MainMenu(commands.Cog):
             tier = PermissionManager.get_tier(interaction.user.id)
             if tier == TIER_NONE:
                 await interaction.response.send_message(
-                    f"{theme.deniedIcon} You don't have admin permissions.",
+                    f"{theme.deniedIcon} {tr('permission.denied')}",
                     ephemeral=True,
                 )
                 return
@@ -717,7 +718,7 @@ class AllianceManagementEntryView(discord.ui.View):
         is_admin, _ = PermissionManager.is_admin(interaction.user.id)
         if not is_admin:
             await interaction.response.send_message(
-                f"{theme.deniedIcon} You don't have admin permissions.",
+                f"{theme.deniedIcon} {tr('permission.denied')}",
                 ephemeral=True,
             )
         return is_admin

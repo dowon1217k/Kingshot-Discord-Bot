@@ -1,4 +1,5 @@
 """Player Sync: keeps member names, levels, kingdoms, power and pictures current from a player-data API."""
+from .runtime_policy import secure_service_url
 import asyncio
 import json
 import logging
@@ -62,8 +63,8 @@ def normalise(raw) -> dict:
 def problems(profile: dict) -> list[str]:
     found = []
     base_url = profile.get("base_url")
-    if not isinstance(base_url, str) or (base_url and not base_url.startswith(("http://", "https://"))):
-        found.append("The base URL must start with http:// or https://.")
+    if not isinstance(base_url, str) or (base_url and not secure_service_url(base_url)):
+        found.append("The base URL must start with https://.")
     player_path = profile.get("player_path")
     if not isinstance(player_path, str) or (player_path and not any(p in player_path for p in PLAYER_ID_PLACEHOLDERS)):
         found.append("Put {id} in the player path where the player ID goes.")
@@ -123,7 +124,7 @@ def convert(field: str, value):
     if field == "power":
         return parse_power(_whole(value))
     url = str(value).strip()
-    return url if url.startswith(("http://", "https://")) else None
+    return url if secure_service_url(url) else None
 
 
 def read_player(payload, profile: dict) -> dict:
@@ -172,11 +173,13 @@ def player_url(profile: dict, fid) -> str:
 
 
 async def fetch_player(session: aiohttp.ClientSession, profile: dict, key: str, fid) -> FetchResult:
+    if not secure_service_url(profile["base_url"]):
+        return FetchResult(0)
     headers = {"Accept": "application/json"}
     if key:
         headers[profile["auth_header"]] = key
     try:
-        async with session.get(player_url(profile, fid), headers=headers, timeout=REQUEST_TIMEOUT) as response:
+        async with session.get(player_url(profile, fid), headers=headers, timeout=REQUEST_TIMEOUT, allow_redirects=False) as response:
             if response.status == 429:
                 return FetchResult(429, retry_after=rate_limit_delay(response))
             if response.status != 200:

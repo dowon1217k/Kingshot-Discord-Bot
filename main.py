@@ -8,7 +8,7 @@ import stat
 # arena and never frees it, so OCR across many to_thread workers grows RSS until
 # a 512MB container OOM-kills the bot. Must be set before glibc inits, so re-exec
 # once if unset (same PID). Pre-set it to override.
-if sys.platform.startswith("linux") and "MALLOC_ARENA_MAX" not in os.environ:
+if __name__ == "__main__" and sys.platform.startswith("linux") and "MALLOC_ARENA_MAX" not in os.environ:
     os.environ["MALLOC_ARENA_MAX"] = "2"
     os.environ.setdefault("MALLOC_TRIM_THRESHOLD_", "131072")
     try:
@@ -71,7 +71,11 @@ try:
     from cogs import bot_startup_display as startup
     from cogs.bot_restart import restart_process
 except ImportError:
-    # cogs/ is missing (likely a bare main.py drop). Fetch the full source for this branch and restart.
+    # Never replace a customized checkout without an explicit operator action.
+    if not any(flag in sys.argv for flag in ("--repair", "--autoupdate")):
+        print("봇 모듈이 없습니다. 이 저장소를 다시 내려받아 복구하세요. 자동 복구는 비활성화되어 있습니다.")
+        sys.exit(1)
+    # Explicit upstream recovery only.
     _bootstrap_from_main_branch(os.environ.get(
         "BOT_BOOTSTRAP_URL",
         "https://github.com/kingshot-project/Kingshot-Discord-Bot/archive/refs/heads/main.zip",
@@ -218,7 +222,7 @@ def should_skip_venv() -> bool:
     return '--no-venv' in sys.argv or is_container() or is_ci_environment()
 
 # Handle venv setup
-if sys.prefix == sys.base_prefix and not should_skip_venv():
+if __name__ == "__main__" and sys.prefix == sys.base_prefix and not should_skip_venv():
     venv_path = "bot_venv"
 
     # Determine the python executable path in the venv
@@ -707,7 +711,7 @@ def setup_dependencies(beta_mode=False):
     return True
 
 beta_mode = "--beta" in sys.argv
-if not setup_dependencies(beta_mode=beta_mode):
+if __name__ == "__main__" and not setup_dependencies(beta_mode=beta_mode):
     pass  # Warnings already shown by setup_dependencies
 
 try:
@@ -751,7 +755,8 @@ def check_vcredist():
     except Exception:
         return True  # If we can't check, we hope it's fine
 
-check_vcredist()
+if __name__ == "__main__":
+    check_vcredist()
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -1154,7 +1159,7 @@ if __name__ == "__main__":
     # Handle update/repair logic
     if "--repair" in sys.argv:
         asyncio.run(check_and_update_files())
-    elif "--no-update" in sys.argv:
+    elif "--autoupdate" not in sys.argv:
         startup.phase_ok("Update check skipped")
     else:
         asyncio.run(check_and_update_files())
@@ -1309,8 +1314,10 @@ if __name__ == "__main__":
     init(autoreset=True)
 
     token_file = "bot_token.txt"
-    if not os.path.exists(token_file):
-        bot_token = input("Enter the bot token: ")
+    if os.getenv("DISCORD_BOT_TOKEN"):
+        bot_token = os.environ["DISCORD_BOT_TOKEN"]
+    elif not os.path.exists(token_file):
+        bot_token = input("Discord 봇 토큰을 입력하세요: ")
         with open(token_file, "w") as f:
             f.write(bot_token)
     else:
@@ -1702,7 +1709,10 @@ if __name__ == "__main__":
                 async with _aio.ClientSession(timeout=timeout) as session:
                     try:
                         headers = {'X-API-Key': 'super_secret_bot_token_nobody_will_ever_find'}
-                        async with session.get("http://ks-gift-code-api.whiteout-bot.com/giftcode_api.php", headers=headers) as resp:
+                        from cogs.runtime_policy import sharing_url
+                        if not sharing_url():
+                            raise RuntimeError("Code sharing disabled")
+                        async with session.get(sharing_url(), headers=headers, allow_redirects=False) as resp:
                             if resp.status < 500:
                                 startup.api_status("Gift Code Distribution API", "ok")
                             else:

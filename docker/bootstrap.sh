@@ -9,9 +9,10 @@ if [ -z "${DISCORD_BOT_TOKEN}" ]; then
     exit 1
 fi
 
+umask 077
 echo "${DISCORD_BOT_TOKEN}" > bot_token.txt
 
-if [ "${UPDATE}" = "0" ]; then
+if [ "${UPDATE:-0}" != "1" ]; then
     ARGS="--no-update"
 else
     ARGS="--autoupdate"

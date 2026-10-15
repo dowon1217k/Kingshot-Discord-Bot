@@ -89,7 +89,7 @@ def test_register_rejects_unknown_alliance(monkeypatch):
     asyncio.run(ar.AllianceRegistration.register.callback(cog, inter, fid=7, alliance=999))
 
     assert inserted == [], "no user row may be written for a nonexistent alliance"
-    assert sent and "doesn't exist" in str(sent[0])
+    assert sent and "해당 연맹이 없습니다" in str(sent[0])
 
 
 def test_register_accepts_known_alliance(monkeypatch):
@@ -158,7 +158,7 @@ def test_register_multistate_without_an_api_state_still_asks_for_it(monkeypatch)
     monkeypatch.setattr(ar, "get_alliance_kid", lambda alliance: None)
     fake_player_api(monkeypatch, None)
     sent = _register(cog)
-    assert inserted == [] and "**kingdom** option" in str(sent[-1])
+    assert inserted == [] and "**kingdom** 항목" in str(sent[-1])
 
 
 def test_register_typed_state_refused_by_the_lock_names_the_api_state(monkeypatch):
@@ -174,5 +174,5 @@ def test_register_typed_state_refused_by_the_lock_names_the_api_state(monkeypatc
 
 def test_register_option_descriptions_are_plain_and_mark_name_and_level_optional():
     described = {p.name: p.description for p in ar.AllianceRegistration.register.parameters}
-    assert "optional" in described["name"] and "optional" in described["level"]
+    assert "선택" in described["name"] and "선택" in described["level"]
     assert "Player Sync" not in described["name"] + described["level"]

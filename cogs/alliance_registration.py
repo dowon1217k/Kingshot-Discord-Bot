@@ -1,4 +1,5 @@
 """Alliance registration flow. /register links an in-game ID to a Discord account (multi-FID, cross-server). /unregister detaches one of your own."""
+from .i18n import tr
 import discord
 from discord.ext import commands
 import sqlite3
@@ -163,14 +164,14 @@ class AllianceRegistration(commands.Cog):
 
     @discord.app_commands.command(
         name="register",
-        description="Link your in-game ID to your Discord account. Multiple IDs supported.",
+        description=tr('registration.description'),
     )
     @discord.app_commands.describe(
-        fid="Your In-Game ID",
-        alliance="Your Alliance Name",
-        kingdom="Your kingdom number. Only needed if your alliance spans several kingdoms",
-        name="Your in-game name (optional)",
-        level="Your town center level, like 30 or TC 10 (optional)",
+        fid=tr('registration.uid_option'),
+        alliance=tr('registration.alliance_option'),
+        kingdom=tr('registration.kingdom_option'),
+        name=tr('registration.name_option'),
+        level=tr('registration.level_option'),
     )
     @discord.app_commands.rename(fid="id")
     @discord.app_commands.autocomplete(alliance=alliance_autocomplete)
@@ -179,7 +180,7 @@ class AllianceRegistration(commands.Cog):
                        level: "str | None" = None):
         if not self.is_registration_enabled():
             await interaction.response.send_message(
-                f"{theme.deniedIcon} Registration is currently disabled.",
+                f"{theme.deniedIcon} {tr('registration.disabled')}",
                 ephemeral=True
             )
             return
@@ -189,8 +190,7 @@ class AllianceRegistration(commands.Cog):
             furnace_lv = parse_furnace_level(level)
             if furnace_lv is None:
                 await interaction.response.send_message(
-                    f"{theme.deniedIcon} `{level}` isn't a town center level. "
-                    f"Try something like `30` or `TC 10`.", ephemeral=True)
+                    f"{theme.deniedIcon} {tr('registration.invalid_level')}", ephemeral=True)
                 return
 
         caller_id = interaction.user.id
@@ -199,7 +199,7 @@ class AllianceRegistration(commands.Cog):
         # Autocomplete is only a suggestion UI - users can submit any integer.
         if not self._alliance_exists(alliance):
             await interaction.response.send_message(
-                f"{theme.deniedIcon} That alliance doesn't exist. Pick one from the suggestions.",
+                f"{theme.deniedIcon} {tr('registration.missing_alliance')}",
                 ephemeral=True,
             )
             return
@@ -208,8 +208,7 @@ class AllianceRegistration(commands.Cog):
 
         if existing and existing[1] is not None and existing[1] != caller_id:
             await interaction.response.send_message(
-                f"{theme.deniedIcon} This ID is already registered to another Discord user. "
-                f"Contact an admin if this needs to be fixed.",
+                f"{theme.deniedIcon} {tr('registration.duplicate')}",
                 ephemeral=True,
             )
             return
@@ -221,9 +220,9 @@ class AllianceRegistration(commands.Cog):
                 if name or furnace_lv:
                     changed = await asyncio.to_thread(apply_member_edit, fid,
                                                       nickname=name, furnace_lv=furnace_lv)
-                note = f"Updated your {' and '.join(changed)}." if changed else "Nothing to change."
+                note = tr('registration.updated_fields', v0=', '.join(changed)) if changed else tr("registration.no_changes")
                 await interaction.response.send_message(
-                    f"{theme.verifiedIcon} ID `{fid}` is already registered to you here. {note}",
+                    tr('registration.already_registered', v0=theme.verifiedIcon, v1=fid, v2=note),
                     ephemeral=True,
                 )
                 return
@@ -234,8 +233,7 @@ class AllianceRegistration(commands.Cog):
             old_name = self._server_name_or_id(existing_server_id, interaction)
             new_name = self._server_name_or_id(current_server_id, interaction)
             await interaction.response.send_message(
-                f"{theme.infoIcon} ID `{fid}` is currently registered on **{old_name}**.\n"
-                f"Move the registration here ({new_name})?",
+                tr('registration.move_prompt', v0=theme.infoIcon, v1=fid, v2=old_name, v3=new_name),
                 view=view, ephemeral=True,
             )
             return
@@ -255,8 +253,7 @@ class AllianceRegistration(commands.Cog):
             kid = typed_kid = parse_state(kingdom)
             if kid is None:
                 await interaction.followup.send(
-                    f"{theme.deniedIcon} `{kingdom}` isn't a kingdom number. "
-                    f"Enter digits only, like `259`.", ephemeral=True)
+                    f"{theme.deniedIcon} {tr('registration.invalid_kingdom')}", ephemeral=True)
                 return
         member = await look_up_new_member(self.bot, fid, alliance, name, furnace_lv, probe=typed_kid is None)
         if member.kid is not None:
@@ -264,9 +261,7 @@ class AllianceRegistration(commands.Cog):
         elif kid is None and await asyncio.to_thread(get_alliance_kid, alliance) is None:
             # No home kingdom to inherit or confirm against, so we can't work it out.
             await interaction.followup.send(
-                f"{theme.infoIcon} This alliance has members in several kingdoms, so "
-                f"we can't tell which one you're in. Run `/register` again and fill in "
-                f"the **kingdom** option with your kingdom number.", ephemeral=True)
+                tr('registration.kingdom_required', v0=theme.infoIcon), ephemeral=True)
             return
 
         kingdom_error = api_state_refusal(check_alliance_kingdom(alliance, kid), member.kid, typed_kid)
@@ -284,14 +279,14 @@ class AllianceRegistration(commands.Cog):
         all_linked = self._linked_fids_for(caller_id)
         if len(all_linked) > 1:
             lines = "\n".join(
-                f"  {theme.fidIcon} `{f}` — {n or '(unnamed)'}"
+                f"  {theme.fidIcon} `{f}` — {n or tr('registration.unnamed')}"
                 for f, n, _, _ in all_linked
             )
-            extra = f"\n\nYou now have **{len(all_linked)} characters** linked:\n{lines}"
+            extra = tr('registration.linked_characters', v0=len(all_linked), v1=lines)
         else:
             extra = ""
-        verb = "Linked" if action == "linked" else "Registered"
-        msg = f"{theme.verifiedIcon} {verb} ID `{fid}` to your Discord account.{extra}"
+        verb = tr('registration.linked') if action == "linked" else tr('registration.registered')
+        msg = tr('registration.success_message', v0=theme.verifiedIcon, v1=verb, v2=fid, v3=extra)
         # Called from both the deferred (new-user) and non-deferred (attach) paths.
         if interaction.response.is_done():
             await interaction.followup.send(msg, ephemeral=True)
@@ -315,7 +310,7 @@ class AllianceRegistration(commands.Cog):
         cur = (current or "").lower()
         choices = []
         for fid, nickname, alliance, _ in rows:
-            label = f"{nickname or '(unnamed)'} ({fid})"
+            label = f"{nickname or tr('registration.unnamed')} ({fid})"
             if cur and cur not in str(fid) and cur not in (nickname or "").lower():
                 continue
             choices.append(discord.app_commands.Choice(name=label[:100], value=fid))
@@ -325,9 +320,9 @@ class AllianceRegistration(commands.Cog):
 
     @discord.app_commands.command(
         name="unregister",
-        description="Unlink one of your in-game IDs from your Discord account.",
+        description=tr('registration.unregister_description'),
     )
-    @discord.app_commands.describe(fid="The in-game ID to unlink")
+    @discord.app_commands.describe(fid=tr('registration.unlink_option'))
     @discord.app_commands.rename(fid="id")
     @discord.app_commands.autocomplete(fid=unregister_autocomplete)
     async def unregister(self, interaction: discord.Interaction, fid: int):
@@ -336,7 +331,7 @@ class AllianceRegistration(commands.Cog):
 
         if not existing:
             await interaction.response.send_message(
-                f"{theme.deniedIcon} ID `{fid}` is not in the database.",
+                tr('registration.not_registered', v0=theme.deniedIcon, v1=fid),
                 ephemeral=True,
             )
             return
@@ -344,15 +339,14 @@ class AllianceRegistration(commands.Cog):
         linked_discord_id = existing[1]
         if linked_discord_id is None:
             await interaction.response.send_message(
-                f"{theme.deniedIcon} ID `{fid}` is not linked to any Discord user.",
+                tr('registration.not_linked', v0=theme.deniedIcon, v1=fid),
                 ephemeral=True,
             )
             return
 
         if linked_discord_id != caller_id:
             await interaction.response.send_message(
-                f"{theme.deniedIcon} ID `{fid}` is linked to a different Discord user. "
-                f"Only the owner can unregister it (or an admin via the admin tools).",
+                tr('registration.wrong_owner', v0=theme.deniedIcon, v1=fid),
                 ephemeral=True,
             )
             return
@@ -361,14 +355,14 @@ class AllianceRegistration(commands.Cog):
         remaining = self._linked_fids_for(caller_id)
         if remaining:
             lines = "\n".join(
-                f"  {theme.fidIcon} `{f}` — {n or '(unnamed)'}"
+                f"  {theme.fidIcon} `{f}` — {n or tr('registration.unnamed')}"
                 for f, n, _, _ in remaining
             )
-            extra = f"\n\nYou still have **{len(remaining)} character(s)** linked:\n{lines}"
+            extra = tr('registration.remaining_characters', v0=len(remaining), v1=lines)
         else:
-            extra = "\n\nYou no longer have any characters linked."
+            extra = tr('registration.no_characters')
         await interaction.response.send_message(
-            f"{theme.verifiedIcon} Unlinked ID `{fid}` from your Discord account.{extra}",
+            tr('registration.unlink_success', v0=theme.verifiedIcon, v1=fid, v2=extra),
             ephemeral=True,
         )
 
@@ -386,30 +380,30 @@ class _MoveServerView(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.caller_id:
             await interaction.response.send_message(
-                f"{theme.deniedIcon} This prompt is for someone else.",
+                tr('registration.wrong_prompt', v0=theme.deniedIcon),
                 ephemeral=True,
             )
             return False
         return True
 
-    @discord.ui.button(label="Move here", style=discord.ButtonStyle.success,
+    @discord.ui.button(label=tr('registration.move_button'), style=discord.ButtonStyle.success,
                        emoji=f"{theme.verifiedIcon}")
     async def confirm(self, interaction: discord.Interaction, _button: discord.ui.Button):
         self.cog._move_registration_to_server(self.fid, self.new_server_id)
         for child in self.children:
             child.disabled = True
         await interaction.response.edit_message(
-            content=f"{theme.verifiedIcon} ID `{self.fid}` is now registered here.",
+            content=tr('registration.moved', v0=theme.verifiedIcon, v1=self.fid),
             view=self,
         )
 
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary,
+    @discord.ui.button(label=tr('common.cancel'), style=discord.ButtonStyle.secondary,
                        emoji=f"{theme.backIcon}")
     async def cancel(self, interaction: discord.Interaction, _button: discord.ui.Button):
         for child in self.children:
             child.disabled = True
         await interaction.response.edit_message(
-            content=f"{theme.infoIcon} No change made. Registration remains on the original server.",
+            content=tr('registration.move_cancelled', v0=theme.infoIcon),
             view=self,
         )
 

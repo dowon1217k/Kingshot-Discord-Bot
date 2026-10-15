@@ -1,4 +1,6 @@
 """Gift code validation engine, queue system, batch operations, and redemption logic."""
+from .runtime_policy import live_redemption_enabled
+from .i18n import tr
 
 import asyncio
 import hashlib
@@ -146,7 +148,7 @@ async def handle_member_redeem_process(cog, process):
 
 # Shown when a new code can't be confirmed yet; schedule_revalidation re-tests it within minutes.
 PENDING_REVALIDATION_NOTICE = (
-    "⏳ Not confirmed yet. Re-checking automatically; it redeems as soon as it validates."
+    tr("gift.pending")
 )
 
 # Backoff (seconds) for re-testing an inconclusive new code, then the 2h loop.
@@ -195,8 +197,8 @@ async def handle_gift_validate_process(cog, process):
     processing_message = None
     if message and channel:
         processing_embed = discord.Embed(
-            title=f"{theme.refreshIcon} Processing Gift Code...",
-            description=f"Validating `{giftcode}`",
+            title=f"{theme.refreshIcon} {tr('gift.processing')}",
+            description=tr("gift.validating", code=giftcode),
             color=theme.emColor1
         )
         try:
@@ -314,12 +316,12 @@ async def handle_gift_redeem_process(cog, process):
 
 async def _send_existing_code_response(cog, message, giftcode, channel):
     """Send response for existing gift code."""
-    reply_embed = discord.Embed(title=f"{theme.infoIcon} Gift Code Already Known", color=theme.emColor1)
+    reply_embed = discord.Embed(title=f"{theme.infoIcon} {tr('gift.known')}", color=theme.emColor1)
     reply_embed.description = (
-        f"**Gift Code Details**\n{theme.upperDivider}\n"
-        f"{theme.userIcon} **Sender:** {message.author.mention}\n"
-        f"{theme.giftIcon} **Gift Code:** `{giftcode}`\n"
-        f"{theme.editListIcon} **Status:** Already in database.\n"
+        f"**{tr('gift.details')}**\n{theme.upperDivider}\n"
+        f"{theme.userIcon} **{tr('gift.sender')}:** {message.author.mention}\n"
+        f"{theme.giftIcon} **{tr('gift.code')}:** `{giftcode}`\n"
+        f"{theme.editListIcon} **{tr('gift.status')}:** {tr('gift.known_details')}\n"
         f"{theme.lowerDivider}\n"
     )
     await channel.send(embed=reply_embed)
@@ -333,33 +335,33 @@ async def _send_existing_code_response(cog, message, giftcode, channel):
 async def _send_validation_response(cog, message, giftcode, is_valid, validation_msg, processing_message=None):
     """Send validation response to channel."""
     if is_valid:
-        reply_embed = discord.Embed(title=f"{theme.verifiedIcon} Gift Code Validated", color=theme.emColor3)
+        reply_embed = discord.Embed(title=f"{theme.verifiedIcon} {tr('gift.valid')}", color=theme.emColor3)
         reply_embed.description = (
-            f"**Gift Code Details**\n{theme.upperDivider}\n"
-            f"{theme.userIcon} **Sender:** {message.author.mention}\n"
-            f"{theme.giftIcon} **Gift Code:** `{giftcode}`\n"
-            f"{theme.verifiedIcon} **Status:** {validation_msg}\n"
+            f"**{tr('gift.details')}**\n{theme.upperDivider}\n"
+            f"{theme.userIcon} **{tr('gift.sender')}:** {message.author.mention}\n"
+            f"{theme.giftIcon} **{tr('gift.code')}:** `{giftcode}`\n"
+            f"{theme.verifiedIcon} **{tr('gift.status')}:** {validation_msg}\n"
             f"{theme.lowerDivider}\n"
         )
         reaction = f"{theme.verifiedIcon}"
     elif is_valid is False:
-        reply_embed = discord.Embed(title=f"{theme.deniedIcon} Invalid Gift Code", color=theme.emColor2)
+        reply_embed = discord.Embed(title=f"{theme.deniedIcon} {tr('gift.invalid')}", color=theme.emColor2)
         reply_embed.description = (
-            f"**Gift Code Details**\n{theme.upperDivider}\n"
-            f"{theme.userIcon} **Sender:** {message.author.mention}\n"
-            f"{theme.giftIcon} **Gift Code:** `{giftcode}`\n"
-            f"{theme.deniedIcon} **Status:** {validation_msg}\n"
-            f"{theme.editListIcon} **Action:** Code not added to database\n"
+            f"**{tr('gift.details')}**\n{theme.upperDivider}\n"
+            f"{theme.userIcon} **{tr('gift.sender')}:** {message.author.mention}\n"
+            f"{theme.giftIcon} **{tr('gift.code')}:** `{giftcode}`\n"
+            f"{theme.deniedIcon} **{tr('gift.status')}:** {validation_msg}\n"
+            f"{theme.editListIcon} {tr('gift.rejected')}\n"
             f"{theme.lowerDivider}\n"
         )
         reaction = f"{theme.deniedIcon}"
     else:
-        reply_embed = discord.Embed(title=f"{theme.warnIcon} Gift Code Added (Validating)", color=discord.Color.yellow())
+        reply_embed = discord.Embed(title=f"{theme.warnIcon} {tr('gift.detected')}", color=discord.Color.yellow())
         reply_embed.description = (
-            f"**Gift Code Details**\n{theme.upperDivider}\n"
-            f"{theme.userIcon} **Sender:** {message.author.mention}\n"
-            f"{theme.giftIcon} **Gift Code:** `{giftcode}`\n"
-            f"{theme.warnIcon} **Status:** {validation_msg}\n"
+            f"**{tr('gift.details')}**\n{theme.upperDivider}\n"
+            f"{theme.userIcon} **{tr('gift.sender')}:** {message.author.mention}\n"
+            f"{theme.giftIcon} **{tr('gift.code')}:** `{giftcode}`\n"
+            f"{theme.warnIcon} **{tr('gift.status')}:** {validation_msg}\n"
             f"\n{PENDING_REVALIDATION_NOTICE}\n"
             f"{theme.lowerDivider}\n"
         )
@@ -478,6 +480,8 @@ async def _revalidation_loop(cog, giftcode, source):
 
 def schedule_revalidation(cog, giftcode, source="unknown"):
     """Start a deduped backoff re-validation chain for a code left pending."""
+    if not live_redemption_enabled():
+        return
     if not hasattr(cog, '_revalidation_tasks'):
         cog._revalidation_tasks = {}
     existing = cog._revalidation_tasks.get(giftcode)
@@ -778,6 +782,8 @@ async def validate_gift_code_immediately(cog, giftcode, source="unknown", force=
     force=True re-probes even a code already stored as validated/invalid (reactivation)."""
     try:
         # Clean the gift code
+        if not live_redemption_enabled():
+            return None, tr("gift.disabled")
         giftcode = cog.clean_gift_code(giftcode)
 
         # Get the best ID for validation
@@ -793,10 +799,10 @@ async def validate_gift_code_immediately(cog, giftcode, source="unknown", force=
                 status = existing[0]
                 if status == 'invalid':
                     cog.logger.info(f"Gift code '{giftcode}' already marked as invalid")
-                    return False, "Code already marked as invalid"
+                    return False, tr("gift.already_invalid")
                 elif status == 'validated':
                     cog.logger.info(f"Gift code '{giftcode}' already validated")
-                    return True, "Code already validated"
+                    return True, tr("gift.already_valid")
 
         # Perform validation using the selected ID — skip the cache so we
         # actually probe the live API (the whole point of validating).
@@ -822,10 +828,10 @@ async def validate_gift_code_immediately(cog, giftcode, source="unknown", force=
 
             # These statuses mean the code is valid but has requirements
             if status in ["TOO_SMALL_SPEND_MORE", "TOO_POOR_SPEND_MORE"]:
-                validation_msg = f"Code validated (has requirements)"
+                validation_msg = tr("gift.requirements")
                 cog.logger.info(f"Gift code '{giftcode}' is valid but has requirements: {status}")
             else:
-                validation_msg = f"Code validated successfully ({status})"
+                validation_msg = tr("gift.validation_ok", status=status)
                 cog.logger.info(f"Gift code '{giftcode}' validated successfully using {fid_source} ID")
 
             return True, validation_msg
@@ -835,9 +841,9 @@ async def validate_gift_code_immediately(cog, giftcode, source="unknown", force=
             mark_code_invalid(cog, giftcode)
 
             reason_map = {
-                "TIME_ERROR": "Code has expired",
-                "CDK_NOT_FOUND": "Code not found or incorrect",
-                "USAGE_LIMIT": "Usage limit reached"
+                "TIME_ERROR": tr("gift.expired"),
+                "CDK_NOT_FOUND": tr("gift.not_found"),
+                "USAGE_LIMIT": tr("gift.limit")
             }
             reason = reason_map.get(status, f"Invalid ({status})")
 
@@ -851,7 +857,7 @@ async def validate_gift_code_immediately(cog, giftcode, source="unknown", force=
 
         else: # Other statuses - don't mark as invalid yet
             cog.logger.warning(f"Gift code '{giftcode}' validation returned: {status}")
-            return None, f"Validation inconclusive ({status})"
+            return None, tr("gift.validation_pending", status=status)
 
     except Exception as e:
         cog.logger.exception(f"Error validating gift code '{giftcode}': {e}")
@@ -1107,6 +1113,8 @@ def batch_process_alliance_results(cog, results_batch):
 
 async def redeem_giftcode_once(cog, player_id, giftcode, kid, session):
     """Redeem one code for a player in kingdom `kid`; returns a status string."""
+    if not live_redemption_enabled():
+        return "ERROR"
     data_to_encode = {
         "fid": f"{player_id}",
         "cdk": giftcode,
@@ -1116,7 +1124,7 @@ async def redeem_giftcode_once(cog, player_id, giftcode, kid, session):
     data = encode_data(cog, data_to_encode)
 
     response_giftcode = await asyncio.to_thread(
-        session.post, cog.wos_giftcode_url, data=data, timeout=(10, 30)
+        session.post, cog.wos_giftcode_url, data=data, timeout=(10, 30), allow_redirects=False
     )
 
     log_entry_redeem = f"\n{datetime.now()} API REQ - Gift Code Redeem\nID:{player_id}, Code:{giftcode}, Kingdom:{kid}\n"
@@ -1936,6 +1944,8 @@ async def claim_giftcode_rewards_wos(cog, player_id, giftcode, *, skip_cache: bo
     `skip_cache=True` — they intentionally re-hit the live API to detect
     codes that have expired since the last redemption."""
 
+    if not live_redemption_enabled():
+        return "ERROR"  # Existing status contract; no HTTP or redemption record.
     giftcode = cog.clean_gift_code(giftcode)
     process_start_time = time.time()
     status = "ERROR"
@@ -2055,7 +2065,7 @@ def _extract_embed_codes(message) -> list:
 
     codes = []
     for text in texts:
-        codes.extend(m.group(1) for m in re.finditer(r'Code:\s*([a-zA-Z0-9]+)', _strip_markdown(text), re.IGNORECASE))
+        codes.extend(m.group(1) for m in re.finditer(r'(?:Code|교환코드|쿠폰|코드)\s*[:：]\s*([a-zA-Z0-9]+)', _strip_markdown(text), re.IGNORECASE))
     return codes
 
 
@@ -2070,7 +2080,7 @@ def _extract_content_codes(content: str) -> list:
         return []
     if len(clean.split()) == 1:
         return [clean] if re.match(r'^[a-zA-Z0-9]+$', clean) else []
-    code_match = re.search(r'Code:\s*([a-zA-Z0-9]+)(?!\S)', clean, re.IGNORECASE)
+    code_match = re.search(r'(?:Code|교환코드|쿠폰|코드)\s*[:：]\s*([a-zA-Z0-9]+)(?!\S)', clean, re.IGNORECASE)
     return [code_match.group(1)] if code_match else []
 
 
@@ -2540,6 +2550,9 @@ async def _resume_or_post_progress(cog, channel, embed, process):
 
 
 async def use_giftcode_for_alliance(cog, alliance_id, giftcode, process=None):
+    if not live_redemption_enabled():
+        cog.logger.info(tr("gift.disabled"))
+        return
     MEMBER_PROCESS_DELAY = 1.0
     API_RATE_LIMIT_COOLDOWN = 60.0
     MAX_RETRY_CYCLES = 10
@@ -2605,11 +2618,11 @@ async def use_giftcode_for_alliance(cog, alliance_id, giftcode, process=None):
             error_embed = discord.Embed(
                 title=f"{theme.deniedIcon} Gift Code Invalid",
                 description=(
-                    f"**Gift Code Details**\n"
+                    f"**{tr('gift.details')}**\n"
                     f"{theme.upperDivider}\n"
-                    f"{theme.giftIcon} **Gift Code:** `{giftcode}`\n"
+                    f"{theme.giftIcon} **{tr('gift.code')}:** `{giftcode}`\n"
                     f"{theme.allianceIcon} **Alliance:** `{alliance_name}`\n"
-                    f"{theme.deniedIcon} **Status:** {final_invalid_reason_for_embed}\n"
+                    f"{theme.deniedIcon} **{tr('gift.status')}:** {final_invalid_reason_for_embed}\n"
                     f"{theme.editListIcon} **Action:** Code status is 'invalid' in database\n"
                     f"{theme.timeIcon} **Time:** <t:{int(datetime.now().timestamp())}:R>\n"
                     f"{theme.lowerDivider}\n"
@@ -2807,7 +2820,7 @@ async def use_giftcode_for_alliance(cog, alliance_id, giftcode, process=None):
                 embed.description = (
                     f"**Gift Code Redemption Halted**\n"
                     f"{theme.upperDivider}\n"
-                    f"{theme.giftIcon} **Gift Code:** `{giftcode}`\n"
+                    f"{theme.giftIcon} **{tr('gift.code')}:** `{giftcode}`\n"
                     f"{theme.allianceIcon} **Alliance:** `{alliance_name}`\n"
                     f"{theme.deniedIcon} **Reason:** {status_reason_runtime}\n"
                     f"{theme.editListIcon} **Action:** Code marked as invalid in database. Remaining members for this alliance will not be processed.\n"
@@ -2837,7 +2850,7 @@ async def use_giftcode_for_alliance(cog, alliance_id, giftcode, process=None):
                 embed.description = (
                     f"**Bot Configuration Error**\n"
                     f"{theme.upperDivider}\n"
-                    f"{theme.giftIcon} **Gift Code:** `{giftcode}`\n"
+                    f"{theme.giftIcon} **{tr('gift.code')}:** `{giftcode}`\n"
                     f"{theme.allianceIcon} **Alliance:** `{alliance_name}`\n"
                     f"{theme.settingsIcon} **Reason:** Sign Error (check bot config/encrypt key)\n"
                     f"{theme.editListIcon} **Action:** Redemption stopped. Check bot configuration.\n"

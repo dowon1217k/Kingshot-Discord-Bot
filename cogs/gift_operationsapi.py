@@ -1,6 +1,7 @@
 """
 Gift code distribution API client. Syncs codes with the shared gift-code-api service.
 """
+from .runtime_policy import sharing_url
 import json
 import aiohttp
 import asyncio
@@ -19,7 +20,7 @@ logger = logging.getLogger('gift')
 class GiftCodeAPI:
     def __init__(self, bot):
         self.bot = bot
-        self.api_url = "http://ks-gift-code-api.whiteout-bot.com/giftcode_api.php"
+        self.api_url = sharing_url()
         self.api_key = "super_secret_bot_token_nobody_will_ever_find"
         
         # Random 5-10min check interval to help reduce API load
@@ -58,12 +59,10 @@ class GiftCodeAPI:
         self.conn.commit()
         
         self.ssl_context = ssl.create_default_context()
-        self.ssl_context.check_hostname = False
-        self.ssl_context.verify_mode = ssl.CERT_NONE
         
         self.logger = logging.getLogger('gift')
 
-        self._api_check_task = asyncio.create_task(self.start_api_check())
+        self._api_check_task = asyncio.create_task(self.start_api_check()) if self.api_url else None
 
     async def _execute_with_retry(self, operation, *args, max_retries=3, delay=0.1):
         """Execute a database operation with retry logic for handling locks."""
@@ -163,6 +162,8 @@ class GiftCodeAPI:
                 
     async def sync_with_api(self):
         """Synchronize gift codes with the API."""
+        if not sharing_url() or self.api_url != sharing_url():
+            return False
         try:
             self.logger.info("Starting API synchronization")
             self.cursor.execute("SELECT giftcode, date, validation_status FROM gift_codes")
@@ -177,7 +178,7 @@ class GiftCodeAPI:
                 await self._wait_for_rate_limit()
                 
                 try:
-                    async with session.get(self.api_url, headers=headers) as response:
+                    async with session.get(self.api_url, headers=headers, allow_redirects=False) as response:
                         response_text = await response.text()
                         
                         if response.status != 200:
@@ -226,7 +227,7 @@ class GiftCodeAPI:
                                         
                                         await self._wait_for_rate_limit()
                                         
-                                        async with session.delete(self.api_url, json=data, headers=headers) as del_response:
+                                        async with session.delete(self.api_url, json=data, headers=headers, allow_redirects=False) as del_response:
                                             if del_response.status != 200:
                                                 self.logger.warning(f"Failed to delete invalid code {code}: {del_response.status}")
                                                 backoff_time = await self._handle_api_error(del_response, await del_response.text())
@@ -455,7 +456,7 @@ class GiftCodeAPI:
                                         
                                         await self._wait_for_rate_limit()
                                         
-                                        async with session.post(self.api_url, json=data, headers=headers) as post_response:
+                                        async with session.post(self.api_url, json=data, headers=headers, allow_redirects=False) as post_response:
                                             if post_response.status == 409:
                                                 self.logger.info(f"Code {db_code} already exists in API")
                                             elif post_response.status == 200:
@@ -502,6 +503,8 @@ class GiftCodeAPI:
             
     async def add_giftcode(self, giftcode: str) -> bool:
         """Add a gift code to the API."""
+        if not sharing_url() or self.api_url != sharing_url():
+            return False
         try: # Check if code already exists in our database
             self.cursor.execute("SELECT validation_status FROM gift_codes WHERE giftcode = ?", (giftcode,))
             result = self.cursor.fetchone()
@@ -530,7 +533,7 @@ class GiftCodeAPI:
                 await self._wait_for_rate_limit()
                 
                 try:
-                    async with session.post(self.api_url, json=data, headers=headers) as response:
+                    async with session.post(self.api_url, json=data, headers=headers, allow_redirects=False) as response:
                         response_text = await response.text()
                         
                         if response.status == 200:
@@ -573,6 +576,8 @@ class GiftCodeAPI:
             
     async def remove_giftcode(self, giftcode: str, from_validation: bool = False) -> bool:
         """Remove a gift code from the API."""
+        if not sharing_url() or self.api_url != sharing_url():
+            return False
         try:
             if not from_validation:
                 self.logger.warning(f"Attempted to remove code {giftcode} without validation flag")
@@ -596,7 +601,7 @@ class GiftCodeAPI:
                 await self._wait_for_rate_limit()
                 
                 try:
-                    async with session.delete(self.api_url, json=data, headers=headers) as response:
+                    async with session.delete(self.api_url, json=data, headers=headers, allow_redirects=False) as response:
                         response_text = await response.text()
                         
                         if response.status == 200:
@@ -627,6 +632,8 @@ class GiftCodeAPI:
             
     async def check_giftcode(self, giftcode: str) -> bool:
         """Check if a gift code exists in the API."""
+        if not sharing_url() or self.api_url != sharing_url():
+            return False
         try:
             connector = aiohttp.TCPConnector(ssl=self.ssl_context)
             async with aiohttp.ClientSession(connector=connector, trust_env=True) as session:
@@ -636,7 +643,7 @@ class GiftCodeAPI:
                 await self._wait_for_rate_limit()
                 
                 try:
-                    async with session.get(f"{self.api_url}?action=check&giftcode={giftcode}", headers=headers) as response:
+                    async with session.get(f"{self.api_url}?action=check&giftcode={giftcode}", headers=headers, allow_redirects=False) as response:
                         if response.status == 200:
                             try:
                                 result = await response.json()

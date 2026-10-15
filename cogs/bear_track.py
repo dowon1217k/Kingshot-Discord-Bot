@@ -119,8 +119,8 @@ def remote_ocr_url():
     Precedence: bot config (UI modal) > OCR_REMOTE_URL env > local."""
     val = remote_ocr_setting()
     if val is not None:
-        return val or None  # '' = disabled (local); otherwise the configured URL
-    return OCR_REMOTE_URL_ENV or None
+        return val if val and val.startswith("https://") else None  # '' = disabled (local); otherwise the configured URL
+    return OCR_REMOTE_URL_ENV if OCR_REMOTE_URL_ENV and OCR_REMOTE_URL_ENV.startswith("https://") else None
 
 
 def invalidate_remote_ocr_cache():
@@ -877,7 +877,7 @@ async def _remote_ocr_post(path: str, image_bytes: bytes, lang: str):
         form.add_field("lang", lang)
         form.add_field("image", image_bytes, filename="image",
                        content_type="application/octet-stream")
-        async with _get_remote_session().post(f"{base}{path}", data=form, headers=headers) as resp:
+        async with _get_remote_session().post(f"{base}{path}", data=form, headers=headers, allow_redirects=False) as resp:
             if resp.status != 200:
                 logger.warning(f"External OCR {path} HTTP {resp.status}; using local OCR.")
                 return None
