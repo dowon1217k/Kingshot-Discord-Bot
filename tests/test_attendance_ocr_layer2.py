@@ -73,11 +73,13 @@ def _fixture_id(case):
     return case.screenshot_path.stem
 
 
+@pytest.mark.ocr_integration
 @pytest.mark.parametrize("case", _FIXTURES, ids=_fixture_id)
-def test_fixture_extraction(case):
+def test_fixture_extraction(case, cached_ocr_models):
     expected = case.expected
     roster = case.roster
 
+    cached_ocr_models(["en"])
     ocr_text = ocr_image(case.screenshot_path)
 
     # ── universal invariants (run for every fixture, no expected JSON needed)

@@ -166,3 +166,31 @@ run if specified.
   ]
 }
 ```
+
+## Offline model preparation and real OCR integration tests
+
+Image inference tests are marked `ocr_integration`. They retain real PNG inputs,
+real RapidOCR/ONNX inference and their original assertions. They require cached,
+SHA256-verified models before pytest starts; missing/corrupt assets fail with
+`OCRModelsUnavailable` instead of trying to download inside the offline suite.
+They are never automatically skipped or replaced with canned OCR output.
+
+With the project venv active:
+
+```bash
+python install/prepare_ocr_models.py                     # check only; exit 1 if missing
+python install/prepare_ocr_models.py --download          # explicit HTTPS + SHA256 preparation
+# Or import an already obtained bundle, without external access:
+python install/prepare_ocr_models.py --source-dir /path/to/models
+python -m pytest tests -m 'not ocr_integration' -q -rs    # unit scope; real OCR explicitly deselected
+python -m pytest tests -m ocr_integration -q -rs          # real inference; no mocks
+python -m pytest tests -q -rs                           # full suite, including real OCR
+```
+
+Do not interpret the unit-only command as OCR readiness. The preparation tool
+uses the installed RapidOCR metadata and its default package model cache; run
+it with the SAME Python/venv as pytest/the bot. Local bundle bytes are accepted
+only if they match the official SHA256. HTTPS redirects remain TLS-verified;
+HTTP downgrades and checksum mismatches fail. Network/proxy failures remain
+failures. The game's redemption service is unrelated to model preparation and
+is never called by this tool.

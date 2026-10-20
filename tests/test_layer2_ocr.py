@@ -91,8 +91,9 @@ def _fixture_id(case):
     return case.screenshot_path.stem
 
 
+@pytest.mark.ocr_integration
 @pytest.mark.parametrize("case", _FIXTURES, ids=_fixture_id)
-def test_fixture_extraction(case):
+def test_fixture_extraction(case, cached_ocr_models):
     expected = case.expected
     roster = case.roster
 
@@ -101,6 +102,7 @@ def test_fixture_extraction(case):
     primary_lang = LANG_TO_OCR.get(ui_lang, "ch")
     fallback_langs = LANG_TO_FALLBACKS.get(ui_lang, [])
 
+    cached_ocr_models([primary_lang, *fallback_langs])
     result = run_ocr_pipeline(
         image_bytes,
         primary_lang=primary_lang,

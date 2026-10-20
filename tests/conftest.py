@@ -118,3 +118,14 @@ def offline_transport(monkeypatch):
     monkeypatch.setattr(socket.socket, 'connect_ex', connect_ex)
     monkeypatch.setenv('KINGSHOT_ENABLE_LIVE_REDEMPTION', '1')
     monkeypatch.delenv('KINGSHOT_ENABLE_CODE_SHARING', raising=False)
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "ocr_integration: real PNG inference requiring verified local OCR models")
+
+
+@pytest.fixture
+def cached_ocr_models():
+    """Fail clearly on missing/corrupt assets without downloading during tests."""
+    from install.prepare_ocr_models import require_cached_models
+    return require_cached_models
